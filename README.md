@@ -18,6 +18,26 @@ This project uses the [OpenWeatherMap API](https://openweathermap.org/api) for w
 - **Documentation**: https://openweathermap.org/api
 - **Weather Icons**: https://openweathermap.org/weather-conditions
 
+## Environment Setup
+
+### 1. Create Environment File
+
+Copy the example environment file:
+
+```sh
+cp .env.example .env
+```
+
+### 2. Configure API Key
+
+Get your API key from [OpenWeatherMap](https://openweathermap.org/api) and update the `.env` file:
+
+```env
+VITE_OPENWEATHER_API_KEY=your_actual_api_key_here
+```
+
+⚠️ **Important**: Never commit the `.env` file to version control. It's already included in `.gitignore`.
+
 ## Tech Stack
 
 - **Framework**: Vue 3 with TypeScript
@@ -31,6 +51,12 @@ This project uses the [OpenWeatherMap API](https://openweathermap.org/api) for w
 ```sh
 # Install dependencies
 npm install
+
+# Create environment file from example
+cp .env.example .env
+
+# Add your OpenWeatherMap API key to .env file
+# VITE_OPENWEATHER_API_KEY=your_api_key_here
 
 # Start development server
 npm run dev
@@ -53,6 +79,9 @@ src/
 ├── assets/
 │   └── main.css          # Tailwind CSS imports
 ├── components/           # Weather app components
+├── services/             # API service layer
+├── composables/          # Vue composables for state management
+├── types/                # TypeScript type definitions
 ├── App.vue               # Main app template with basic layout
 └── main.ts               # App entry point
 ```

@@ -4,11 +4,11 @@ import { ref } from 'vue'
 import { CITIES, DEFAULT_CITY_ID } from '@/types/city'
 
 interface Props {
-  modelValue?: string
+  modelValue?: number
 }
 
 interface Emits {
-  (e: 'update:modelValue', value: string): void
+  (e: 'update:modelValue', value: number): void
   (e: 'cityChange', city: City): void
 }
 
@@ -28,7 +28,7 @@ const selectCity = (city: City) => {
 </script>
 
 <template>
-  <nav class="bg-white border-b border-gray-200">
+  <nav class="bg-white">
     <div class="flex">
       <button
         v-for="city in CITIES"
@@ -37,8 +37,8 @@ const selectCity = (city: City) => {
           'cursor-pointer flex-1 py-4 px-6 text-sm font-medium tracking-wide transition-all duration-200',
           'hover:bg-gray-50 focus:outline-none',
           activeCity === city.id
-            ? 'text-gray-900 border-b-2 border-red-500 bg-gray-50'
-            : 'text-gray-500 border-b-2 border-transparent',
+            ? 'text-gray-900 border-b-3 border-red-500 bg-gray-50'
+            : 'text-gray-500 border-b-3 border-transparent',
         ]"
         @click="selectCity(city)"
         type="button"
