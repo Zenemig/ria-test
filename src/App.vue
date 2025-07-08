@@ -1,21 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { City } from '@/types/city'
-import { DEFAULT_CITY_ID } from '@/types/city'
+import { DEFAULT_CITY } from '@/types/city'
 import AppHeader from './components/AppHeader/index.vue'
 import CityNavBar from './components/NavBar/index.vue'
 import AppFooter from './components/AppFooter/index.vue'
 import ErrorMessage from './components/ErrorMessage/index.vue'
+import HourlyForecast from './components/HourlyForecast/index.vue'
+import DailyForecast from './components/DailyForecast/index.vue'
 import { useWeather } from '@/composables/useWeather'
 
-const selectedCityId = ref(DEFAULT_CITY_ID)
+const selectedCity = ref<City>(DEFAULT_CITY)
 
-// Use the weather composable with city ID
-const { hourlyForecast, dailyForecast, isLoading, error, lastUpdated, refreshWeather, clearError } =
-  useWeather(selectedCityId)
+const { weatherData, isLoading, error, lastUpdated, refreshWeather, clearError } =
+  useWeather(selectedCity)
 
 const handleCityChange = (city: City) => {
-  selectedCityId.value = city.id
+  selectedCity.value = city
   clearError()
 }
 
@@ -27,20 +28,33 @@ const handleRefresh = () => {
 <template>
   <div class="min-h-screen">
     <AppHeader title="Simple Weather" :loading="isLoading" :on-refresh="handleRefresh" />
-    <CityNavBar v-model="selectedCityId" @city-change="handleCityChange" />
+    <CityNavBar v-model="selectedCity" @city-change="handleCityChange" />
 
-    <!-- Main content with gradient background matching mockup -->
     <div class="min-h-screen mockup-gradient p-4">
-      <!-- Error display -->
       <ErrorMessage :error="error" :on-clear-error="clearError" />
 
-      <!-- Weather content -->
-      <main class="container mx-auto space-y-6">
-        <pre>{{ hourlyForecast }}</pre>
-        <pre>{{ dailyForecast }}</pre>
+      <main v-if="weatherData" class="container mx-auto max-w-4xl space-y-6">
+        <HourlyForecast :hourly-forecast="weatherData.hourlyForecast" />
+
+        <DailyForecast :daily-forecast="weatherData.dailyForecast" />
       </main>
+
+      <div v-else-if="isLoading && !error" class="container mx-auto max-w-4xl">
+        <div class="bg-white rounded-lg shadow-sm p-12 text-center">
+          <div
+            class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"
+          ></div>
+          <p class="text-gray-600">Loading weather data...</p>
+        </div>
+      </div>
+
+      <div v-else-if="!weatherData && !isLoading && !error" class="container mx-auto max-w-4xl">
+        <div class="bg-white rounded-lg shadow-sm p-12 text-center">
+          <p class="text-gray-600">Select a city to view weather forecast</p>
+        </div>
+      </div>
     </div>
-    <!-- Last Updated Footer -->
+
     <AppFooter :last-updated="lastUpdated" />
   </div>
 </template>

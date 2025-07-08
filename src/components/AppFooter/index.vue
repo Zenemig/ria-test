@@ -7,8 +7,11 @@ withDefaults(defineProps<Props>(), {
   lastUpdated: null,
 })
 
+defineOptions({
+  name: 'AppFooter',
+})
+
 const formatLastUpdated = (date: Date): string => {
-  const now = new Date()
   const month = date.toLocaleDateString('en-US', { month: 'short' })
   const day = date.getDate()
   const hours = date.getHours().toString().padStart(2, '0')
@@ -26,11 +29,3 @@ const formatLastUpdated = (date: Date): string => {
     {{ formatLastUpdated(lastUpdated) }}
   </footer>
 </template>
-
-<script lang="ts">
-export default {
-  name: 'AppFooter',
-}
-</script>
-
-<style scoped></style>

@@ -1,42 +1,36 @@
 import { reactive, computed, watchEffect, toValue, readonly } from 'vue'
 import type { MaybeRefOrGetter } from 'vue'
-import type { WeatherState, WeatherData } from '@/types/weather'
+import type { WeatherState, WeatherApiResponse } from '@/types/weather'
+import type { City } from '@/types/city'
 import { fetchWeatherData, WeatherApiError } from '@/services/weatherApi'
 
 // Cache for storing weather data to avoid excessive API calls
-const weatherCache = new Map<number, { data: WeatherData; timestamp: number }>()
+const weatherCache = new Map<string, { data: WeatherApiResponse; timestamp: number }>()
 const CACHE_DURATION = 10 * 60 * 1000 // 10 minutes
 
-export function useWeather(cityId: MaybeRefOrGetter<number>) {
-  // Reactive state
+const getCacheKey = (city: City): string => `${city.name},${city.country}`
+
+export function useWeather(city: MaybeRefOrGetter<City>) {
   const state = reactive<WeatherState>({
-    data: {
-      hourly: [],
-      daily: [],
-    },
+    data: null,
     loading: false,
     error: null,
     lastUpdated: null,
   })
 
-  // Computed properties for easier access
-  const hourlyForecast = computed(() => state.data.hourly)
-  const dailyForecast = computed(() => state.data.daily)
+  const weatherData = computed(() => state.data)
   const isLoading = computed(() => state.loading)
   const error = computed(() => state.error)
   const lastUpdated = computed(() => state.lastUpdated)
 
-  // Helper function to check if cached data is still valid
   const isCacheValid = (timestamp: number): boolean => {
     return Date.now() - timestamp < CACHE_DURATION
   }
 
-  // Helper function to clear error state
   const clearError = () => {
     state.error = null
   }
 
-  // Helper function to set error state
   const setError = (error: unknown) => {
     if (error instanceof WeatherApiError) {
       state.error = {
@@ -50,15 +44,15 @@ export function useWeather(cityId: MaybeRefOrGetter<number>) {
     }
   }
 
-  // Function to fetch weather data for a city ID
-  const fetchWeather = async (id: number): Promise<void> => {
-    if (!id || id <= 0) {
-      setError(new Error('Valid city ID is required'))
+  const fetchWeather = async (cityData: City): Promise<void> => {
+    if (!cityData || !cityData.name || !cityData.country) {
+      setError(new Error('Valid city with name and country is required'))
       return
     }
 
-    // Check cache first
-    const cached = weatherCache.get(id)
+    const cacheKey = getCacheKey(cityData)
+
+    const cached = weatherCache.get(cacheKey)
     if (cached && isCacheValid(cached.timestamp)) {
       state.data = cached.data
       state.lastUpdated = new Date(cached.timestamp)
@@ -66,20 +60,16 @@ export function useWeather(cityId: MaybeRefOrGetter<number>) {
       return
     }
 
-    // Set loading state
     state.loading = true
     clearError()
 
     try {
-      // Fetch fresh data
-      const weatherData = await fetchWeatherData(id)
+      const weatherData = await fetchWeatherData(cityData)
 
-      // Update state
       state.data = weatherData
       state.lastUpdated = new Date()
 
-      // Cache the data
-      weatherCache.set(id, {
+      weatherCache.set(cacheKey, {
         data: weatherData,
         timestamp: Date.now(),
       })
@@ -91,38 +81,34 @@ export function useWeather(cityId: MaybeRefOrGetter<number>) {
     }
   }
 
-  // Function to refresh weather data (bypass cache)
   const refreshWeather = async (): Promise<void> => {
-    const id = toValue(cityId)
-    if (!id) return
+    const cityData = toValue(city)
+    if (!cityData) return
 
-    // Remove from cache to force fresh fetch
-    weatherCache.delete(id)
+    const cacheKey = getCacheKey(cityData)
 
-    await fetchWeather(id)
+    weatherCache.delete(cacheKey)
+
+    await fetchWeather(cityData)
   }
 
-  // Function to clear all cached data
   const clearCache = () => {
     weatherCache.clear()
   }
 
-  // Watch for city ID changes and automatically fetch weather data
   watchEffect(() => {
-    const id = toValue(cityId)
-    if (id && id > 0) {
-      fetchWeather(id)
+    const cityData = toValue(city)
+    if (cityData && cityData.name && cityData.country) {
+      fetchWeather(cityData)
     }
   })
 
-  // Return reactive state and functions
   return {
     // State
     state: readonly(state),
 
     // Computed properties
-    hourlyForecast,
-    dailyForecast,
+    weatherData,
     isLoading,
     error,
     lastUpdated,
@@ -135,5 +121,4 @@ export function useWeather(cityId: MaybeRefOrGetter<number>) {
   }
 }
 
-// Export types for better TypeScript support
 export type UseWeatherReturn = ReturnType<typeof useWeather>

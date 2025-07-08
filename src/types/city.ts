@@ -1,12 +1,12 @@
 export interface City {
-  id: number
   name: string
+  country: string
 }
 
 export const CITIES: City[] = [
-  { id: 3451190, name: 'Rio de Janeiro' },
-  { id: 1816670, name: 'Beijing' },
-  { id: 5368361, name: 'Los Angeles' },
+  { name: 'Rio de Janeiro', country: 'BR' },
+  { name: 'Beijing', country: 'CN' },
+  { name: 'Los Angeles', country: 'US' },
 ]
 
-export const DEFAULT_CITY_ID = 5368361
+export const DEFAULT_CITY: City = { name: 'Los Angeles', country: 'US' }

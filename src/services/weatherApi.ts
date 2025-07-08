@@ -1,40 +1,76 @@
-import type { ForecastResponse, HourlyForecast, DailyForecast, WeatherData } from '@/types/weather'
+import type {
+  ForecastResponse,
+  GeocodingResponse,
+  HourlyForecast,
+  DailyForecast,
+  WeatherApiResponse,
+  ForecastItem,
+} from '@/types/weather'
+import type { City } from '@/types/city'
 
-// API Configuration
 const API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY
 const BASE_URL = 'https://api.openweathermap.org/data/2.5'
+const GEO_URL = 'https://api.openweathermap.org/geo/1.0'
 
-// Validate API key is available
 if (!API_KEY) {
-  throw new Error('VITE_OPENWEATHER_API_KEY environment variable is required')
+  throw new Error(
+    'OpenWeatherMap API key is required. Please set VITE_OPENWEATHER_API_KEY environment variable.',
+  )
 }
 
-// Helper function to handle API responses
+export class WeatherApiError extends Error {
+  public code?: number
+
+  constructor(message: string, code?: number) {
+    super(message)
+    this.name = 'WeatherApiError'
+    this.code = code
+  }
+}
+
 const handleApiResponse = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
+    const errorText = await response.text()
     throw new WeatherApiError(
-      errorData.message || `HTTP error! status: ${response.status}`,
+      `API request failed: ${response.status} ${response.statusText} - ${errorText}`,
       response.status,
     )
   }
-  return response.json()
-}
 
-// Custom error class for weather API errors
-export class WeatherApiError extends Error {
-  constructor(
-    message: string,
-    public code?: number,
-  ) {
-    super(message)
-    this.name = 'WeatherApiError'
+  try {
+    return await response.json()
+  } catch (error) {
+    throw new WeatherApiError(
+      `Failed to parse API response: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    )
   }
 }
 
-// Fetch 5-day forecast for a city by ID
-export const fetchForecast = async (cityId: number): Promise<ForecastResponse> => {
-  const url = `${BASE_URL}/forecast?id=${cityId}&appid=${API_KEY}&units=metric`
+export const geocodeCity = async (
+  cityName: string,
+  countryCode?: string,
+): Promise<GeocodingResponse> => {
+  const query = countryCode ? `${cityName},${countryCode}` : cityName
+  const url = `${GEO_URL}/direct?q=${encodeURIComponent(query)}&limit=5&appid=${API_KEY}`
+
+  try {
+    const response = await fetch(url)
+    return await handleApiResponse<GeocodingResponse>(response)
+  } catch (error) {
+    if (error instanceof WeatherApiError) {
+      throw error
+    }
+    throw new WeatherApiError(
+      `Failed to geocode city: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    )
+  }
+}
+
+export const fetchWeatherDataByCoords = async (
+  lat: number,
+  lon: number,
+): Promise<ForecastResponse> => {
+  const url = `${BASE_URL}/forecast?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
 
   try {
     const response = await fetch(url)
@@ -44,103 +80,127 @@ export const fetchForecast = async (cityId: number): Promise<ForecastResponse> =
       throw error
     }
     throw new WeatherApiError(
-      `Failed to fetch forecast: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      `Failed to fetch weather data: ${error instanceof Error ? error.message : 'Unknown error'}`,
     )
   }
 }
 
-// Transform forecast response to hourly forecasts (from next hour)
-export const transformHourlyForecast = (response: ForecastResponse): HourlyForecast[] => {
-  const now = new Date()
-  const nextHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1)
+const convertToHourlyForecast = (item: ForecastItem, timezoneOffset: number): HourlyForecast => {
+  const utcTime = new Date(item.dt * 1000)
+  const localTime = new Date(utcTime.getTime() + timezoneOffset * 1000)
 
-  // Filter items that are from next hour onwards (up to 24 hours)
-  const nextDay = new Date(now.getTime() + 24 * 60 * 60 * 1000)
-  const hourlyItems = response.list.filter((item) => {
-    const itemDate = new Date(item.dt * 1000)
-    return itemDate >= nextHour && itemDate <= nextDay
-  })
-
-  // Transform to our format
-  return hourlyItems.map((item) => ({
-    time: new Date(item.dt * 1000),
+  return {
+    time: localTime,
     temperature: Math.round(item.main.temp),
-    icon: item.weather[0].icon,
-    precipitationChance: Math.round(item.pop * 100),
-  }))
-}
-
-// Transform forecast response to daily forecasts (starting from tomorrow)
-export const transformDailyForecast = (response: ForecastResponse): DailyForecast[] => {
-  const now = new Date()
-  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
-
-  // Filter items from tomorrow onwards
-  const futureItems = response.list.filter((item) => {
-    const itemDate = new Date(item.dt * 1000)
-    return itemDate >= tomorrow
-  })
-
-  // Group forecast items by date
-  const dailyGroups = new Map<string, typeof futureItems>()
-
-  futureItems.forEach((item) => {
-    const date = new Date(item.dt * 1000)
-    const dateKey = date.toDateString()
-
-    if (!dailyGroups.has(dateKey)) {
-      dailyGroups.set(dateKey, [])
-    }
-    dailyGroups.get(dateKey)!.push(item)
-  })
-
-  // Convert to daily forecasts (take first 5 days)
-  const dailyForecasts: DailyForecast[] = []
-  let count = 0
-
-  for (const [dateKey, items] of dailyGroups) {
-    if (count >= 5) break
-
-    const date = new Date(dateKey)
-    const temps = items.map((item) => item.main.temp)
-    const maxTemp = Math.round(Math.max(...temps))
-    const minTemp = Math.round(Math.min(...temps))
-
-    // Use weather from the middle of the day (around noon) or first available
-    const middayItem =
-      items.find((item) => {
-        const hour = new Date(item.dt * 1000).getHours()
-        return hour >= 12 && hour <= 15
-      }) || items[0]
-
-    const weather = middayItem.weather[0]
-
-    dailyForecasts.push({
-      date,
-      dayName: date.toLocaleDateString('en-US', { weekday: 'long' }),
-      condition: weather.main,
-      icon: weather.icon,
-      maxTemp,
-      minTemp,
-    })
-
-    count++
+    feelsLike: Math.round(item.main.feels_like),
+    humidity: item.main.humidity,
+    pressure: item.main.pressure,
+    windSpeed: item.wind.speed,
+    windDirection: item.wind.deg,
+    visibility: item.visibility,
+    precipitationProbability: Math.round(item.pop * 100),
+    weather: {
+      main: item.weather[0].main,
+      description: item.weather[0].description,
+      icon: item.weather[0].icon,
+    },
   }
-
-  return dailyForecasts
 }
 
-// Main function to fetch and transform all weather data
-export const fetchWeatherData = async (cityId: number): Promise<WeatherData> => {
-  try {
-    const forecastResponse = await fetchForecast(cityId)
+const getTodaysHourlyForecast = (
+  forecasts: HourlyForecast[],
+  timezoneOffset: number,
+): HourlyForecast[] => {
+  const utcNow = new Date()
+  const localNow = new Date(utcNow.getTime() + timezoneOffset * 1000)
 
-    const hourly = transformHourlyForecast(forecastResponse)
-    const daily = transformDailyForecast(forecastResponse)
+  const todayStart = new Date(localNow.getFullYear(), localNow.getMonth(), localNow.getDate())
+  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1)
+
+  return forecasts.filter((forecast) => {
+    const forecastTime = forecast.time
+    return forecastTime >= localNow && forecastTime <= todayEnd
+  })
+}
+
+const groupForecastsByDay = (forecasts: HourlyForecast[]): DailyForecast[] => {
+  const groupedByDay = forecasts.reduce(
+    (acc, forecast) => {
+      const dateKey = forecast.time.toDateString()
+      if (!acc[dateKey]) {
+        acc[dateKey] = []
+      }
+      acc[dateKey].push(forecast)
+      return acc
+    },
+    {} as Record<string, HourlyForecast[]>,
+  )
+
+  return Object.entries(groupedByDay)
+    .map(([dateKey, dayForecasts]) => {
+      const temperatures = dayForecasts.map((f) => f.temperature)
+      const humidities = dayForecasts.map((f) => f.humidity)
+      const pressures = dayForecasts.map((f) => f.pressure)
+      const windSpeeds = dayForecasts.map((f) => f.windSpeed)
+      const precipitationProbs = dayForecasts.map((f) => f.precipitationProbability)
+
+      const weatherCounts = dayForecasts.reduce(
+        (acc, forecast) => {
+          const key = forecast.weather.main
+          acc[key] = (acc[key] || 0) + 1
+          return acc
+        },
+        {} as Record<string, number>,
+      )
+
+      const mostCommonWeather = Object.entries(weatherCounts).reduce((a, b) =>
+        weatherCounts[a[0]] > weatherCounts[b[0]] ? a : b,
+      )[0]
+
+      const representativeWeather =
+        dayForecasts.find((f) => f.weather.main === mostCommonWeather)?.weather ||
+        dayForecasts[0].weather
+
+      return {
+        date: new Date(dateKey),
+        temperatureMin: Math.min(...temperatures),
+        temperatureMax: Math.max(...temperatures),
+        humidity: Math.round(humidities.reduce((sum, h) => sum + h, 0) / humidities.length),
+        pressure: Math.round(pressures.reduce((sum, p) => sum + p, 0) / pressures.length),
+        windSpeed:
+          Math.round((windSpeeds.reduce((sum, w) => sum + w, 0) / windSpeeds.length) * 10) / 10,
+        precipitationProbability: Math.max(...precipitationProbs),
+        weather: representativeWeather,
+        forecasts: dayForecasts,
+      }
+    })
+    .sort((a, b) => a.date.getTime() - b.date.getTime())
+}
+
+export const fetchWeatherData = async (city: City): Promise<WeatherApiResponse> => {
+  try {
+    const geocodingResult = await geocodeCity(city.name, city.country)
+
+    if (geocodingResult.length === 0) {
+      throw new WeatherApiError(`No location found for: ${city.name}, ${city.country}`)
+    }
+
+    const location = geocodingResult[0]
+
+    const weatherData = await fetchWeatherDataByCoords(location.lat, location.lon)
+
+    const timezoneOffset = weatherData.city.timezone
+    const allHourlyForecasts = weatherData.list.map((item) =>
+      convertToHourlyForecast(item, timezoneOffset),
+    )
+
+    const todaysHourlyForecast = getTodaysHourlyForecast(allHourlyForecasts, timezoneOffset)
+
+    const dailyForecast = groupForecastsByDay(allHourlyForecasts)
 
     return {
-      hourly,
-      daily,
+      hourlyForecast: todaysHourlyForecast,
+      dailyForecast,
     }
   } catch (error) {
     if (error instanceof WeatherApiError) {

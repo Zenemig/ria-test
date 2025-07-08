@@ -1,3 +1,15 @@
+// OpenWeatherMap Geocoding API Types
+export interface GeocodingLocation {
+  name: string
+  local_names?: Record<string, string>
+  lat: number
+  lon: number
+  country: string
+  state?: string
+}
+
+export type GeocodingResponse = GeocodingLocation[]
+
 // OpenWeatherMap API Response Types
 export interface WeatherCondition {
   id: number
@@ -37,7 +49,7 @@ export interface ForecastItem {
   clouds: Clouds
   wind: Wind
   visibility: number
-  pop: number // Probability of precipitation
+  pop: number
   dt_txt: string
 }
 
@@ -58,26 +70,38 @@ export interface ForecastResponse {
   }
 }
 
-// App-specific Transformed Types
+// App-specific Types for Processed Forecasts
 export interface HourlyForecast {
   time: Date
   temperature: number
-  icon: string
-  precipitationChance: number
+  feelsLike: number
+  humidity: number
+  pressure: number
+  windSpeed: number
+  windDirection: number
+  visibility: number
+  precipitationProbability: number
+  weather: {
+    main: string
+    description: string
+    icon: string
+  }
 }
 
 export interface DailyForecast {
   date: Date
-  dayName: string
-  condition: string
-  icon: string
-  maxTemp: number
-  minTemp: number
-}
-
-export interface WeatherData {
-  hourly: HourlyForecast[]
-  daily: DailyForecast[]
+  temperatureMin: number
+  temperatureMax: number
+  humidity: number
+  pressure: number
+  windSpeed: number
+  precipitationProbability: number
+  weather: {
+    main: string
+    description: string
+    icon: string
+  }
+  forecasts: HourlyForecast[]
 }
 
 export interface WeatherError {
@@ -85,8 +109,13 @@ export interface WeatherError {
   code?: number
 }
 
+export interface WeatherApiResponse {
+  hourlyForecast: HourlyForecast[]
+  dailyForecast: DailyForecast[]
+}
+
 export interface WeatherState {
-  data: WeatherData
+  data: WeatherApiResponse | null
   loading: boolean
   error: WeatherError | null
   lastUpdated: Date | null

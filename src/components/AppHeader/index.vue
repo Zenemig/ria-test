@@ -14,6 +14,10 @@ withDefaults(defineProps<Props>(), {
   loading: false,
   onRefresh: undefined,
 })
+
+defineOptions({
+  name: 'AppHeader',
+})
 </script>
 
 <template>
@@ -22,10 +26,8 @@ withDefaults(defineProps<Props>(), {
 
     <div class="flex items-center space-x-3">
       <!-- TODO: Add search functionality -->
-      <!-- Search Icon -->
       <!-- <MagnifyingGlassIcon class="h-6 w-6 hover:opacity-75 transition-opacity cursor-pointer" /> -->
 
-      <!-- Refresh Button -->
       <button
         v-if="onRefresh"
         @click="onRefresh"
@@ -38,11 +40,3 @@ withDefaults(defineProps<Props>(), {
     </div>
   </header>
 </template>
-
-<script lang="ts">
-export default {
-  name: 'AppHeader',
-}
-</script>
-
-<style scoped></style>
