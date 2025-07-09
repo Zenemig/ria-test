@@ -46,6 +46,113 @@ const handleApiResponse = async <T>(response: Response): Promise<T> => {
   }
 }
 
+/**
+ * Linear interpolation between two values
+ */
+const linearInterpolate = (value1: number, value2: number, factor: number): number => {
+  return value1 + (value2 - value1) * factor
+}
+
+/**
+ * Circular interpolation for wind direction (handles 360° wrap-around)
+ */
+const interpolateWindDirection = (dir1: number, dir2: number, factor: number): number => {
+  // Normalize directions to 0-360
+  const normDir1 = ((dir1 % 360) + 360) % 360
+  const normDir2 = ((dir2 % 360) + 360) % 360
+
+  // Calculate the shortest angular distance
+  let diff = normDir2 - normDir1
+  if (diff > 180) {
+    diff -= 360
+  } else if (diff < -180) {
+    diff += 360
+  }
+
+  const result = normDir1 + diff * factor
+  return ((result % 360) + 360) % 360
+}
+
+/**
+ * Interpolate between two hourly forecast points
+ */
+const interpolateForecast = (
+  forecast1: HourlyForecast,
+  forecast2: HourlyForecast,
+  targetTime: Date,
+): HourlyForecast => {
+  const time1 = forecast1.time.getTime()
+  const time2 = forecast2.time.getTime()
+  const targetTimestamp = targetTime.getTime()
+
+  // Calculate interpolation factor (0 = forecast1, 1 = forecast2)
+  const factor = (targetTimestamp - time1) / (time2 - time1)
+
+  return {
+    time: targetTime,
+    temperature: Math.round(
+      linearInterpolate(forecast1.temperature, forecast2.temperature, factor),
+    ),
+    feelsLike: Math.round(linearInterpolate(forecast1.feelsLike, forecast2.feelsLike, factor)),
+    humidity: Math.round(linearInterpolate(forecast1.humidity, forecast2.humidity, factor)),
+    pressure: Math.round(linearInterpolate(forecast1.pressure, forecast2.pressure, factor)),
+    windSpeed:
+      Math.round(linearInterpolate(forecast1.windSpeed, forecast2.windSpeed, factor) * 10) / 10,
+    windDirection: Math.round(
+      interpolateWindDirection(forecast1.windDirection, forecast2.windDirection, factor),
+    ),
+    visibility: Math.round(linearInterpolate(forecast1.visibility, forecast2.visibility, factor)),
+    precipitationProbability: Math.round(
+      linearInterpolate(
+        forecast1.precipitationProbability,
+        forecast2.precipitationProbability,
+        factor,
+      ),
+    ),
+    // For weather conditions, use the closer forecast point
+    weather: factor < 0.5 ? forecast1.weather : forecast2.weather,
+  }
+}
+
+/**
+ * Create hourly interpolated forecasts from 3-hour interval data
+ */
+const createHourlyInterpolatedForecasts = (forecasts: HourlyForecast[]): HourlyForecast[] => {
+  if (forecasts.length < 2) {
+    return forecasts
+  }
+
+  const interpolatedForecasts: HourlyForecast[] = []
+
+  for (let i = 0; i < forecasts.length - 1; i++) {
+    const current = forecasts[i]
+    const next = forecasts[i + 1]
+
+    // Add the current forecast
+    interpolatedForecasts.push(current)
+
+    // Calculate time difference in hours
+    const timeDiffMs = next.time.getTime() - current.time.getTime()
+    const hoursDiff = timeDiffMs / (1000 * 60 * 60)
+
+    // Only interpolate if there's more than 1 hour gap
+    if (hoursDiff > 1) {
+      const hoursToInterpolate = Math.floor(hoursDiff) - 1
+
+      for (let h = 1; h <= hoursToInterpolate; h++) {
+        const interpolatedTime = new Date(current.time.getTime() + h * 60 * 60 * 1000)
+        const interpolatedForecast = interpolateForecast(current, next, interpolatedTime)
+        interpolatedForecasts.push(interpolatedForecast)
+      }
+    }
+  }
+
+  // Add the last forecast
+  interpolatedForecasts.push(forecasts[forecasts.length - 1])
+
+  return interpolatedForecasts
+}
+
 export const geocodeCity = async (
   cityName: string,
   countryCode?: string,
@@ -190,9 +297,14 @@ export const fetchWeatherData = async (city: City): Promise<WeatherApiResponse> 
     const weatherData = await fetchWeatherDataByCoords(location.lat, location.lon)
 
     const timezoneOffset = weatherData.city.timezone
-    const allHourlyForecasts = weatherData.list.map((item) =>
+
+    // Convert raw forecast items to hourly forecasts
+    const rawHourlyForecasts = weatherData.list.map((item) =>
       convertToHourlyForecast(item, timezoneOffset),
     )
+
+    // Create interpolated hourly forecasts from 3-hour data
+    const allHourlyForecasts = createHourlyInterpolatedForecasts(rawHourlyForecasts)
 
     const todaysHourlyForecast = getTodaysHourlyForecast(allHourlyForecasts, timezoneOffset)
 
