@@ -26,11 +26,11 @@ const handleRefresh = () => {
 </script>
 
 <template>
-  <div class="min-h-screen">
+  <div class="flex flex-col min-h-screen">
     <AppHeader title="Simple Weather" :loading="isLoading" :on-refresh="handleRefresh" />
     <CityNavBar v-model="selectedCity" @city-change="handleCityChange" />
 
-    <div class="min-h-screen mockup-gradient p-4">
+    <div class="flex-1 mockup-gradient p-4">
       <ErrorMessage :error="error" :on-clear-error="clearError" />
 
       <main v-if="weatherData" class="container mx-auto max-w-4xl space-y-6">

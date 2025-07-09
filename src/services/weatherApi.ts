@@ -214,19 +214,19 @@ const convertToHourlyForecast = (item: ForecastItem, timezoneOffset: number): Ho
   }
 }
 
-const getTodaysHourlyForecast = (
+const getNext12HoursForecast = (
   forecasts: HourlyForecast[],
   timezoneOffset: number,
 ): HourlyForecast[] => {
   const utcNow = new Date()
   const localNow = new Date(utcNow.getTime() + timezoneOffset * 1000)
 
-  const todayStart = new Date(localNow.getFullYear(), localNow.getMonth(), localNow.getDate())
-  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1)
+  // Calculate 12 hours from now
+  const next12Hours = new Date(localNow.getTime() + 12 * 60 * 60 * 1000)
 
   return forecasts.filter((forecast) => {
     const forecastTime = forecast.time
-    return forecastTime >= localNow && forecastTime <= todayEnd
+    return forecastTime >= localNow && forecastTime <= next12Hours
   })
 }
 
@@ -306,12 +306,12 @@ export const fetchWeatherData = async (city: City): Promise<WeatherApiResponse> 
     // Create interpolated hourly forecasts from 3-hour data
     const allHourlyForecasts = createHourlyInterpolatedForecasts(rawHourlyForecasts)
 
-    const todaysHourlyForecast = getTodaysHourlyForecast(allHourlyForecasts, timezoneOffset)
+    const next12HoursForecast = getNext12HoursForecast(allHourlyForecasts, timezoneOffset)
 
     const dailyForecast = groupForecastsByDay(allHourlyForecasts)
 
     return {
-      hourlyForecast: todaysHourlyForecast,
+      hourlyForecast: next12HoursForecast,
       dailyForecast,
     }
   } catch (error) {
