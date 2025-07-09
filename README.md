@@ -36,8 +36,6 @@ Get your API key from [OpenWeatherMap](https://openweathermap.org/api) and updat
 VITE_OPENWEATHER_API_KEY=your_actual_api_key_here
 ```
 
-⚠️ **Important**: Never commit the `.env` file to version control. It's already included in `.gitignore`.
-
 ## Tech Stack
 
 - **Framework**: Vue 3 with TypeScript
